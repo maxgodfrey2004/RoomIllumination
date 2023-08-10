@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Room Illumination</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <h1>Room Illumination Demonstration</h1>
+  <button id="drawButton" onclick="startAnimation()">Start</button>
+  <button id="stopButton" onclick="stopAnimation()">Stop</button>
+  <br/>
+  <br/>
+  <canvas id="canvas" width="800" height="800" style="border: 1px solid black;"/>
+  <script src="classes.js"></script>
+  <script>
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+
+    const COORDS = [
+      [300, 100],
+      [400, 200],
+      [400, 300],
+      [500, 300],
+      [500, 400],
+      [600, 400],
+      [700, 500],
+      [600, 500],
+      [600, 600],
+      [500, 700],
+      [500, 600],
+      [400, 600],
+      [300, 500],
+      [400, 500],
+      [400, 400],
+      [300, 500],
+      [300, 400],
+      [200, 400],
+      [200, 300],
+      [100, 300],
+      [200, 200],
+      [300, 200],
+    ];
+
+    const ORIGIN = [300, 300];
+
+    var boundaries = new Array();
+    var photons = new Array();
+    var renderInterval;
+
+    function loadBoundaries() {
+      boundaries = new Array();
+      for (var i = 0; i < COORDS.length; ++i) {
+        nxtIdx = (i + 1) % COORDS.length;
+        boundaries.push(new LineSegment(
+          COORDS[i][0],
+          COORDS[i][1],
+          COORDS[nxtIdx][0],
+          COORDS[nxtIdx][1]
+        ));
+      }
+    }
+    
+    function createPhotons() {
+      photons = new Array();
+      photons.push(new Photon(ORIGIN[0], ORIGIN[1], 0.349, 3, 3));
+      photons.push(new Photon(ORIGIN[0], ORIGIN[1], -0.349, 3, 3));
+    }
+
+    function drawCircle(x, y, radius, color = 'black') {
+      ctx.beginPath();
+      ctx.fillStyle = color; 
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    function drawBackground() {
+      ctx.beginPath();
+      ctx.fillStyle = '#909090';
+      ctx.rect(0, 0, 800, 800);
+      ctx.fill();
+    }
+
+    function drawPolygon() {
+      ctx.beginPath();
+      ctx.fillStyle = 'white';
+      ctx.moveTo(COORDS[0][0], COORDS[0][1]);
+      for (var i = 0; i < COORDS.length; ++i) {
+        nxtIdx = (i + 1) % COORDS.length;
+        ctx.lineTo(COORDS[nxtIdx][0], COORDS[nxtIdx][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawPointsOfInterest() {
+      drawCircle(ORIGIN[0], ORIGIN[1], 2, 'green');
+    }
+
+    function drawPhotons() {
+      for (var i = 0; i < photons.length; ++i) {
+        drawCircle(photons[i].x, photons[i].y, 2, 'red');
+      }
+    }
+
+    function draw() {
+      drawBackground();
+      drawPolygon();
+      drawPointsOfInterest();
+      drawPhotons();
+    }
+
+    function updatePositions() {
+      // for (var i = photons.length - 1; i >= 0; --i) {
+      //   // Check to see if we have any collisions with corners.
+      //   for (var corner = 0; corner < COORDS.length; ++corner) {
+      //     if (photons[i].
+      //         checkPointCollision(COORDS[corner][0], COORDS[corner][1])) {
+      //       photons.splice(i, 1);
+      //       break;
+      //     }
+      //   }
+      // }
+      for (var i = 0; i < photons.length; ++i) {
+        for (var edge = 0; edge < boundaries.length; ++edge) {
+          if (photons[i].checkLineCollision(boundaries[edge])) {
+            photons[i].bounceOffSegment(boundaries[edge]);
+          }
+        }
+      }
+      for (var i = 0; i < photons.length; ++i) {
+        photons[i].updatePosition();
+      }
+    }
+
+    function updateScreen() {
+      updatePositions();
+      draw();
+    }
+
+    function startAnimation() {
+      clearInterval(renderInterval);
+      loadBoundaries();
+      createPhotons();
+      renderInterval = setInterval(updateScreen, 30);
+    }
+
+    function stopAnimation() {
+      clearInterval(renderInterval);
+    }
+  </script>
+</body>
+</html>
