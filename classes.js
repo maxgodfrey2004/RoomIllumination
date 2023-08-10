@@ -57,6 +57,7 @@ class LineSegment {
     this.length = Math.hypot(this.dx, this.dy); // The segment's length.
     this.normal = new Vector(-this.dy, this.dx); // A surface normal vector.
     this.normal = this.normal.mult(this.normal.norm);
+    this.lastBounce = -1; // ID of the last reflected wall.
   }
 }
 
@@ -70,12 +71,15 @@ class LineSegment {
 //                      must be from a line segment for a collision to occur.
 //
 class Photon {
-  constructor(x, y, dir, speed, collisionRadius) {
+  constructor(x, y, dir, speed, collisionRadius, color = 'red') {
     this.x = x;
     this.y = y;
     this.vecDir = new Vector(speed * Math.cos(dir), speed * Math.sin(dir));
     this.speed = speed;
     this.collisionRadius = collisionRadius;
+    this.color = color;
+    this.contactPoints = new Array();
+    this.contactPoints.push([this.x, this.y]);
   }
 
   updatePosition() {
@@ -114,7 +118,7 @@ class Photon {
   bounceOffSegment(line) {
     var normalProj = this.vecDir.projOnto(line.normal);
     var parallelProj = this.vecDir.sub(normalProj);
-    console.log(normalProj, parallelProj);
     this.vecDir = parallelProj.sub(normalProj);
+    this.contactPoints.push([this.x, this.y]);
   }
 }

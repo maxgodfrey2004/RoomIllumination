@@ -20,7 +20,11 @@
   <script>
     var canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
-
+    
+    const NUM_COLLISIONS_BEFORE_TERMINATION = 100;
+    
+    const ORIGIN = [300, 300];
+    
     const COORDS = [
       [300, 100],
       [400, 200],
@@ -46,8 +50,6 @@
       [300, 200],
     ];
 
-    const ORIGIN = [300, 300];
-
     var boundaries = new Array();
     var photons = new Array();
     var renderInterval;
@@ -67,8 +69,19 @@
     
     function createPhotons() {
       photons = new Array();
-      photons.push(new Photon(ORIGIN[0], ORIGIN[1], 0.349, 3, 3));
-      photons.push(new Photon(ORIGIN[0], ORIGIN[1], -0.349, 3, 3));
+      // Testing photons:
+      // photons.push(new Photon(ORIGIN[0], ORIGIN[1], 0.349, 0.3, 0.151));
+      // photons.push(new Photon(ORIGIN[0], ORIGIN[1], -0.349, 0.3, 0.151));
+      for (var i = 0; i <= 255; ++i) {
+        photons.push(new Photon(
+          ORIGIN[0],
+          ORIGIN[1],
+          (i / 256) * 2 * Math.PI,
+          0.151,
+          0.151,
+          `rgb(${i}, 153, 255)`,
+        ));
+      }
     }
 
     function drawCircle(x, y, radius, color = 'black') {
@@ -78,16 +91,31 @@
       ctx.fill();
     }
 
+    function drawLine(x1, y1, x2, y2, color = 'black', width = 0.5) {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
     function drawBackground() {
       ctx.beginPath();
-      ctx.fillStyle = '#909090';
+      ctx.fillStyle = 'black';
       ctx.rect(0, 0, 800, 800);
       ctx.fill();
     }
 
     function drawPolygon() {
+      for (var i = 0; i < COORDS.length; ++i) {
+        var nxtIdx = (i + 1) % COORDS.length;
+        drawLine(COORDS[i][0], COORDS[i][1], COORDS[nxtIdx][0],
+            COORDS[nxtIdx][1],'white', 10);
+        drawCircle(COORDS[i][0], COORDS[i][1], 5, 'white');
+      }
       ctx.beginPath();
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = 'black';
       ctx.moveTo(COORDS[0][0], COORDS[0][1]);
       for (var i = 0; i < COORDS.length; ++i) {
         nxtIdx = (i + 1) % COORDS.length;
@@ -103,7 +131,26 @@
 
     function drawPhotons() {
       for (var i = 0; i < photons.length; ++i) {
-        drawCircle(photons[i].x, photons[i].y, 2, 'red');
+        const len = photons[i].contactPoints.length;
+        for (var j = 0; j < len - 1; ++j) {
+          drawLine(
+            photons[i].contactPoints[j][0],
+            photons[i].contactPoints[j][1],
+            photons[i].contactPoints[j + 1][0],
+            photons[i].contactPoints[j + 1][1],
+            photons[i].color
+          );
+        }
+        drawLine(
+          photons[i].contactPoints[len - 1][0],
+          photons[i].contactPoints[len - 1][1],
+          photons[i].x,
+          photons[i].y,
+          photons[i].color
+        );
+      }
+      for (var i = 0; i < photons.length; ++i) {
+        drawCircle(photons[i].x, photons[i].y, 1.3, photons[i].color);
       }
     }
 
@@ -115,20 +162,14 @@
     }
 
     function updatePositions() {
-      // for (var i = photons.length - 1; i >= 0; --i) {
-      //   // Check to see if we have any collisions with corners.
-      //   for (var corner = 0; corner < COORDS.length; ++corner) {
-      //     if (photons[i].
-      //         checkPointCollision(COORDS[corner][0], COORDS[corner][1])) {
-      //       photons.splice(i, 1);
-      //       break;
-      //     }
-      //   }
-      // }
-      for (var i = 0; i < photons.length; ++i) {
+      for (var i = photons.length - 1; i >= 0; --i) {
         for (var edge = 0; edge < boundaries.length; ++edge) {
-          if (photons[i].checkLineCollision(boundaries[edge])) {
+          if (edge !== photons[i].lastBounce &&
+              photons[i].checkLineCollision(boundaries[edge])) {
+            photons[i].lastBounce = edge;
             photons[i].bounceOffSegment(boundaries[edge]);
+            hasBounced = true;
+            break;
           }
         }
       }
@@ -138,7 +179,9 @@
     }
 
     function updateScreen() {
-      updatePositions();
+      for (var i = 0; i < 10; ++i) {
+        updatePositions();
+      }
       draw();
     }
 
