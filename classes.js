@@ -61,6 +61,30 @@ class LineSegment {
   }
 }
 
+// Represents a square region in 2D space.
+//
+// Parameters:
+//   - x: Number, top-left x-coordinate.
+//   - y: Number, top-left y-coordinate.
+//   - 
+class Square {
+  constructor(x, y, size) {
+    this.x = x;
+    this.y = y;
+    this.size = size;
+  }
+  
+  // Returns true if the point (x, y) is in the square
+  contains(x, y) {
+    return (
+      x >= this.x &&
+      x <= this.x + this.size &&
+      y >= this.y &&
+      y <= this.y + this.size
+    );
+  }
+}
+
 // Represents a photon (light 'particle' that bounces around the room)
 //
 // Parameters:
@@ -80,6 +104,8 @@ class Photon {
     this.color = color;
     this.contactPoints = new Array();
     this.contactPoints.push([this.x, this.y]);
+    this.magEntry = null;
+    this.lastMagPoint = null;
   }
 
   updatePosition() {
