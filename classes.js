@@ -95,13 +95,14 @@ class Square {
 //                      must be from a line segment for a collision to occur.
 //
 class Photon {
-  constructor(x, y, dir, speed, collisionRadius, color = 'red') {
+  constructor(x, y, dir, speed, collisionRadius, headColor, tailColor) {
     this.x = x;
     this.y = y;
     this.vecDir = new Vector(speed * Math.cos(dir), speed * Math.sin(dir));
     this.speed = speed;
     this.collisionRadius = collisionRadius;
-    this.color = color;
+    this.headColor = headColor;
+    this.tailColor = tailColor;
     this.contactPoints = new Array();
     this.contactPoints.push([this.x, this.y]);
     this.magEntry = null;
