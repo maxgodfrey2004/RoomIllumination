@@ -290,6 +290,7 @@
 
     function startAnimation() {
       clearInterval(renderInterval);
+      magLines = new Array();
       loadBoundaries();
       createPhotons();
       renderInterval = setInterval(updateScreen, 30);
