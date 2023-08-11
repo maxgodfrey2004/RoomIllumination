@@ -106,21 +106,34 @@ class Photon {
     this.contactPoints.push([this.x, this.y]);
     this.magEntry = null;
     this.lastMagPoint = null;
+    this.active = true;
+  }
+
+  deactivate() {
+    this.active = false;
   }
 
   updatePosition() {
-    this.x += this.vecDir.x;
-    this.y += this.vecDir.y;
+    if (this.active) {
+      this.x += this.vecDir.x;
+      this.y += this.vecDir.y;
+    }
   }
 
   // Returns whether or not the photon collides with the point (a corner).
   checkPointCollision(px, py) {
+    if (!this.active) {
+      return false;
+    }
     var dist = Math.hypot(this.x - px, this.y - py);
     return dist <= this.collisionRadius;
   }
 
   // Returns whether or not the photon collides with a line segment (a wall).
   checkLineCollision(line) {
+    if (!this.active) {
+      return false;
+    }
     if (this.checkPointCollision(line.x1, line.y1) ||
         this.checkPointCollision(line.x2, line.y2)) {
       return true;
@@ -142,6 +155,9 @@ class Photon {
   // Recalculates the direction of the photon based on the normal vector to a
   // line segment.
   bounceOffSegment(line) {
+    if (!this.active) {
+      return;
+    }
     var normalProj = this.vecDir.projOnto(line.normal);
     var parallelProj = this.vecDir.sub(normalProj);
     this.vecDir = parallelProj.sub(normalProj);

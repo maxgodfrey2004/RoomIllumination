@@ -15,16 +15,22 @@
   <button id="stopButton" onclick="stopAnimation()">Stop</button>
   <br/>
   <br/>
-  <canvas id="canvas" width="800" height="800" style="border: 1px solid black;"/>
+  <canvas id="canvas" width="1000" height="800" style="border: 1px solid black;"/>
   <script src="classes.js"></script>
   <script>
     var canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
     
     const NUM_COLLISIONS_BEFORE_TERMINATION = 100;
+
+    const BACKGROUND_COLOR = '#1d3557';
+    const ORIGIN_COLOR = '#457b9d';
+    const WALL_COLOR = '#a8dadc';
+    const MAG_COLOR = '#e63946';
+    const PHOTON_COLOR = '#f1faee';
     
-    const ORIGIN = [300, 300]; // The light source
-    const MAG = [500, 500]; // The point to be magnified
+    const ORIGIN = [300, 500]; // The light source
+    const MAG = [700, 500]; // The point to be magnified
 
     const MAG_SIDE = 20; // Side length of the `MAG` box.
     const MAG_VIEW = [650, 150]; // The centre of the magnified view
@@ -52,28 +58,28 @@
     ]
     
     const COORDS = [
-      [300, 100],
-      [400, 200],
-      [400, 300],
-      [500, 300],
-      [500, 400],
-      [600, 400],
-      [700, 500],
-      [600, 500],
-      [600, 600],
-      [500, 700],
-      [500, 600],
-      [400, 600],
-      [300, 500],
-      [400, 500],
-      [400, 400],
-      [300, 500],
-      [300, 400],
-      [200, 400],
-      [200, 300],
       [100, 300],
-      [200, 200],
-      [300, 200],
+      [300, 300],
+      [400, 400],
+      [500, 300],
+      [600, 400],
+      [700, 300],
+      [900, 300],
+      [800, 400],
+      [900, 500],
+      [900, 700],
+      [800, 600],
+      [700, 700],
+      [500, 700],
+      [600, 600],
+      [500, 500],
+      [500, 700],
+      [400, 600],
+      [300, 700],
+      [200, 600],
+      [100, 700],
+      [100, 500],
+      [200, 400],
     ];
 
     var boundaries = new Array(); // LineSegment instances representing walls.
@@ -109,19 +115,19 @@
           (i / 256) * 2 * Math.PI,
           0.151,
           0.151,
-          `rgb(${i}, 153, 255)`
+          PHOTON_COLOR
         ));
       }
     }
 
-    function drawCircle(x, y, radius, color = 'black') {
+    function drawCircle(x, y, radius, color) {
       ctx.beginPath();
       ctx.fillStyle = color; 
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.fill();
     }
 
-    function drawLine(x1, y1, x2, y2, color = 'black', width = 0.5) {
+    function drawLine(x1, y1, x2, y2, color, width = 0.5) {
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
@@ -132,20 +138,20 @@
 
     function drawBackground() {
       ctx.beginPath();
-      ctx.fillStyle = 'black';
-      ctx.rect(0, 0, 800, 800);
+      ctx.fillStyle = BACKGROUND_COLOR;
+      ctx.rect(0, 0, canvas.width, canvas.height);
       ctx.fill();
     }
 
-    function drawPolygon() {
+    function drawRoom() {
       for (var i = 0; i < COORDS.length; ++i) {
         var nxtIdx = (i + 1) % COORDS.length;
         drawLine(COORDS[i][0], COORDS[i][1], COORDS[nxtIdx][0],
-            COORDS[nxtIdx][1],'white', 10);
-        drawCircle(COORDS[i][0], COORDS[i][1], 5, 'white');
+            COORDS[nxtIdx][1], WALL_COLOR, 10);
+        drawCircle(COORDS[i][0], COORDS[i][1], 5, WALL_COLOR);
       }
       ctx.beginPath();
-      ctx.fillStyle = 'black';
+      ctx.fillStyle = BACKGROUND_COLOR;
       ctx.moveTo(COORDS[0][0], COORDS[0][1]);
       for (var i = 0; i < COORDS.length; ++i) {
         nxtIdx = (i + 1) % COORDS.length;
@@ -156,9 +162,9 @@
     }
 
     function drawPointsOfInterest() {
-      drawCircle(ORIGIN[0], ORIGIN[1], 2, 'white');
-      drawCircle(MAG[0], MAG[1], 2, 'yellow');
-      drawCircle(MAG[0], MAG[1], 1, 'black');
+      drawCircle(ORIGIN[0], ORIGIN[1], 2, ORIGIN_COLOR);
+      drawCircle(MAG[0], MAG[1], 2, MAG_COLOR);
+      drawCircle(MAG[0], MAG[1], 0.9, BACKGROUND_COLOR);
     }
 
     function drawPhotons() {
@@ -182,14 +188,16 @@
         );
       }
       for (var i = 0; i < photons.length; ++i) {
-        drawCircle(photons[i].x, photons[i].y, 1.3, photons[i].color);
+        if (photons[i].active) {
+          drawCircle(photons[i].x, photons[i].y, 1.3, photons[i].color);
+        }
       }
     }
 
     function drawMag() {
       // Draw the circle.
-      drawCircle(MAG_VIEW[0], MAG_VIEW[1], 3, 'yellow');
-      drawCircle(MAG_VIEW[0], MAG_VIEW[1], 1.5, 'black');
+      drawCircle(MAG_VIEW[0], MAG_VIEW[1], 3, MAG_COLOR);
+      drawCircle(MAG_VIEW[0], MAG_VIEW[1], 1.5, BACKGROUND_COLOR);
       // Draw lines from past photons.
       for (var i = 0; i < magLines.length; ++i) {
         drawLine(
@@ -210,35 +218,46 @@
           var viewerY = MAG_VIEW[1] + (MAG_VIEW_SIDE / MAG_SIDE) * dy;
           drawCircle(viewerX, viewerY, 3, photons[i].color);
           drawLine(photons[i].magEntry[0], photons[i].magEntry[1], viewerX,
-              viewerY, 1);
+              viewerY, photons[i].color, 1);
         }
       }
       // Draw the box around the point in the room.
       for (var i = 0; i < MAG_BOX.length; ++i) {
         var nxtIdx = (i + 1) % MAG_BOX.length;
         drawLine(MAG_BOX[i][0], MAG_BOX[i][1], MAG_BOX[nxtIdx][0],
-            MAG_BOX[nxtIdx][1], 'white', 1);
-        drawCircle(MAG_BOX[i][0], MAG_BOX[i][1], 0.5, 'white');
+            MAG_BOX[nxtIdx][1], MAG_COLOR, 1);
+        drawCircle(MAG_BOX[i][0], MAG_BOX[i][1], 0.5, MAG_COLOR);
       }
       // Draw the viewer bounds.
       for (var i = 0; i < MAG_VIEW_BOX.length; ++i) {
         var nxtIdx = (i + 1) % MAG_VIEW_BOX.length;
         drawLine(MAG_VIEW_BOX[i][0], MAG_VIEW_BOX[i][1],
-            MAG_VIEW_BOX[nxtIdx][0], MAG_VIEW_BOX[nxtIdx][1], 'white', 2);
-        drawCircle(MAG_VIEW_BOX[i][0], MAG_VIEW_BOX[i][1], 1, 'white');
+            MAG_VIEW_BOX[nxtIdx][0], MAG_VIEW_BOX[nxtIdx][1], MAG_COLOR, 2);
+        drawCircle(MAG_VIEW_BOX[i][0], MAG_VIEW_BOX[i][1], 1, MAG_COLOR);
       }
     }
 
     function draw() {
       drawBackground();
-      drawPolygon();
+      drawRoom();
       drawPhotons();
       drawPointsOfInterest();
       drawMag();
     }
 
     function updatePositions() {
+      // Delete photons that hit corners.
       for (var i = photons.length - 1; i >= 0; --i) {
+        for (var point = 0; point < COORDS.length; ++point) {
+          if (photons[i].checkPointCollision(
+                COORDS[point][0], COORDS[point][1])) {
+            photons[i].deactivate();
+            break;
+          }
+        }
+      }
+      // Bounce photons off edges.
+      for (var i = 0; i < photons.length; ++i) {
         for (var edge = 0; edge < boundaries.length; ++edge) {
           if (edge !== photons[i].lastBounce &&
               photons[i].checkLineCollision(boundaries[edge])) {
@@ -249,6 +268,7 @@
           }
         }
       }
+      // Move the photons.
       for (var i = 0; i < photons.length; ++i) {
         photons[i].updatePosition();
       }
