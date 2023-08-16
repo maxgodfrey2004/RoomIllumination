@@ -3,10 +3,13 @@
   <head>
     <meta charset="utf-8">
     <title>Room Illumination</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
-          rel="stylesheet"/>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+      }
+    </style>
 </head>
-<body class="ml-2" onload="draw()">
+<body onload="draw()">
   <h1>Room Illumination Demonstration</h1>
   <p>
     Press "Start Animation" to begin the simulation and "Stop Animation" to end
@@ -15,61 +18,51 @@
     buttons, a preview of the recording will appear under
     <a href="#recordingHeader">Recording</a>.
   </p>
-  <h2 id="recordingHeader">Recording</h2>
-  <div class="d-flex">
-    <span class="mr-2">
-      Recording duration (in seconds):
-    </span>
-    <input id="durationBox" class="mr-2" type="text" value="180" size="5">
-    </input>
-    <button id="startButton" class="btn btn-primary btn-sm mr-2"
-            onclick="startRecording()">
-      Start Recording
-    </button>
-    <button id="stopButton" class="btn btn-primary btn-sm mr-2"
-            onclick="stopRecording()">
-      Stop Recording
-    </button>
-    <button id="startAllButton" class="btn btn-success btn-sm"
-            onclick="startAnimationAndRecording()">
-      Start Animation and Recording
-    </button>
+  <div>
+    <h2>Animation</h2>
+    <div>
+      <button id="startAnimButton" onclick="startAnimation()">
+        Start Animation
+      </button>
+      <button id="stopAnimButton" onclick="stopAnimation()">
+        Stop Animation
+      </button>
+    </div>
+    <br/>
+    <canvas id="canvas" width="1000" height="800"
+            style="border: 1px solid black;"></canvas>
   </div>
   <div>
-    <p id="status">Status: Recording not started</p>
-    <video id="preview" class="border border-dark" width="160" height="120"
-           autoplay muted></video>
-    <video id="recording" class="border border-dark" width="160" height="120"
-           controls></video>
+    <h2 id="recordingHeader">Recording</h2>
+    <div>
+      <button id="startRecButton" onclick="startRecording()">
+        Start Recording
+      </button>
+      <button id="stopRecButton" onclick="stopRecording()">
+        Stop Recording
+      </button>
+      <button id="startAllButton" onclick="startAnimationAndRecording()">
+        Start Animation and Recording
+      </button>
+    </div>
+    <div>
+      <p id="status">Status: Recording not started</p>
+      <video id="recording" width="160" height="120"
+            controls autoplay loop></video>
+      <br/>
+      <span>
+        After the recording is complete:
+      </span>
+      <a id="downloadButton" href="#" download="Recording.webm">
+        Download
+      </a>
+    </div>
   </div>
-  <br/>
-  <div class="d-flex">
-    <span class="mr-2">
-      After the recording is complete:
-    </span>
-    <a class="btn btn-link btn-sm border border-dark" type="button
-       id="downloadButton" class="button">
-      Download
-    </a>
-  </div>
-  <h2>Animation</h2>
-  <div>
-    <button id="drawButton" class="btn btn-primary btn-sm mr-2"
-            onclick="startAnimation()">
-      Start Animation
-    </button>
-    <button id="stopButton" class="btn btn-primary btn-sm mr-2"
-            onclick="stopAnimation()">
-      Stop Animation
-    </button>
-  </div>
-  <br/>
-  <canvas id="canvas" width="1000" height="800"
-          style="border: 1px solid black;"></canvas>
+  <script src="whammy.js"></script>
   <script src="classes.js"></script>
   <script>
     var canvas = document.getElementById('canvas');
-    var ctx = canvas.getContext('2d');
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     const BACKGROUND_COLOR = 'black';
     const WALL_COLOR = '#A13D63';
@@ -142,69 +135,46 @@
     var magLines = new Array(); // Streaks of light in the `MAG` box.
 
     // Recording infrastructure.
-    var video = document.getElementById('recording');
-    var preview = document.getElementById('preview');
+    var video = new Whammy.Video(RENDER_INTERVAL_TIME);
+    var currentlyRecording = false;
+    var recording = document.getElementById('recording');
     var downloadButton = document.getElementById('downloadButton');
     var statusElement = document.getElementById('status');
-    var durationBox = document.getElementById('durationBox');
-    var recordingChunks = new Array();
-
-    function wait(delayInMS) {
-      return new Promise((resolve) => setTimeout(resolve, delayInMS));
-    }
+    var startRecButton = document.getElementById('startRecButton');
 
     function displayStatus(message) {
       statusElement.innerHTML = message;
     }
 
-    function recordFor(stream, lengthInMS) {
-      let recorder = new MediaRecorder(stream);
-      let data = [];
-      recorder.ondataavailable = (event) => data.push(event.data);
-      recorder.start();
-      displayStatus(`Status: ${lengthInMS}ms Recording Started`);
-      let stopped = new Promise((resolve, reject) => {
-        recorder.onstop = resolve;
-        recorder.onerror = (event) => reject(event.name);
-      });
-      let recorded = wait(lengthInMS).then(() => {
-        if (recorder.state === 'recording') {
-          recorder.stop();
-        }
-      });
-      return Promise.all([stopped, recorded]).then(() => data);
-    }
-
     function startRecording() {
-      var duration = parseInt(durationBox.value);
-      if (isNaN(duration)) {
-        alert('Non-integer value in duration box.');
+      if (currentlyRecording) {
         return;
       }
-      duration *= 1000; // Convert to ms.
-      let stream = canvas.captureStream(RENDER_INTERVAL_TIME);
-      preview.srcObject = stream;
-      downloadButton.href = stream;
-      preview.captureStream =
-        preview.captureStream || preview.mozCaptureStream;
-      // Play the preview and record from it.
-      new Promise((resolve) => {
-        preview.onplaying = resolve;
-      }).then(() => {
-        return recordFor(preview.captureStream(), duration);
-      }).then((recordedChunks) => {
-        let recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-        recording.src = URL.createObjectURL(recordedBlob);
-        downloadButton.href = recording.src;
-        downloadButton.download = 'RecordedVideo.webm';
-        displayStatus('Status: Recording finished');
-      }).catch((error) => {
-        alert(error);
-      });
+      if (!confirm('This feature only works on Firefox right now. Proceed?')) {
+        return;
+      }
+      currentlyRecording = true;
     }
 
     function stopRecording() {
-      preview.srcObject.getTracks().forEach((track) => track.stop());
+      if (!currentlyRecording) {
+        return;
+      }
+      currentlyRecording = false;
+      startRecButton.disabled = true;
+      startAllButton.disabled = true;
+      displayStatus('Compiling video...');
+      const timeStart = +new Date;
+      video.compile(false, function(output) {
+        var url = (window.URL ? URL : webkitURL).createObjectURL(output);
+        console.log(url);
+        recording.src = url;
+        downloadButton.href = recording.src;
+        const timeEnd = +new Date;
+        console.log(output);
+        displayStatus(`Video compile time: ${timeEnd - timeStart}ms. Size ` +
+            `${Math.ceil(output.size / 1024)}KB.`);
+      });
     }
 
     function loadBoundaries() {
@@ -424,6 +394,9 @@
         updateMag();
       }
       draw();
+      if (currentlyRecording) {
+        video.add(ctx);
+      }
     }
 
     function startAnimation() {
@@ -435,8 +408,16 @@
     }
 
     function startAnimationAndRecording() {
-      startAnimation();
+      if (currentlyRecording) {
+        return;
+      }
       startRecording();
+      if (!currentlyRecording) {
+        // The user cancelled the operation
+        return;
+      }
+      video.add(ctx);
+      startAnimation();
     }
 
     function stopAnimation() {
