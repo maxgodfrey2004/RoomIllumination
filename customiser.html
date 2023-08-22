@@ -587,6 +587,7 @@ SOFTWARE. -->
     function startAnimation() {
       clearInterval(renderInterval);
       magLines = new Array();
+      tailLines = new Array();
       loadBoundaries();
       createPhotons();
       renderInterval = setInterval(updateScreen, RENDER_INTERVAL_TIME);
