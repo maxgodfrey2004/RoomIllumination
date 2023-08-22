@@ -221,7 +221,7 @@ SOFTWARE. -->
         alert(`Invalid Origin Coordinate: "${originInput.value}".`);
         return;
       }
-      var lines = coordsTextArea.innerHTML.split('\n');
+      var lines = coordsTextArea.value.split('\n');
       var sanitizedCoords = [];
       for (var i = 0; i < lines.length; ++i) {
         lines[i] = lines[i].trim();
