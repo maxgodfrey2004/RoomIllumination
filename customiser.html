@@ -1,0 +1,613 @@
+<!-- MIT License
+
+Copyright (c) 2023 Max Godfrey
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Room Illumination Customiser</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .nomargin {
+        margin-bottom: 7px;
+        margin-top: 0px;
+      }
+
+      .indent {
+        margin-bottom: 0px;
+        margin-top: 0px;
+        padding-left: 2em;
+      }
+
+      .r10 {
+        padding-right: 10px;
+      }
+
+      .same-row {
+        display:flex;
+        flex-direction: row;
+        align-items: center;
+      }
+      </style>
+</head>
+<body onload="draw()">
+  <h1>Room Illumination Customisation</h1>
+  <p>
+    Input your desired information into the
+    <a href="#customisationHeader">Customisation</a>
+    panel, and press "Load" to see what it looks like.
+    Press "Start Animation" to begin the simulation and "Stop Animation" to end
+    it.
+    If you take a recording using the "Start Recording" and "Stop Recording"
+    buttons, a preview of the recording will appear under
+    <a href="#recordingHeader">Recording</a>.
+  </p>
+  <div>
+    <span class="same-row" style="margin-bottom: -10px;">
+      <h2 id="customisationHeader" class="r10">
+        Customisation
+      </h2>
+      <button id="loadButton" onclick="loadInfo()">Load</button>
+    </span>
+    <h3 class="nomargin">Room Information</h3>
+    <span class="same-row indent">
+      <p class="r10 nomargin">Light Source Coordinates:</p>
+      <input id="originInput" class="nomargin" value="300 500"/>
+    </span>
+    <span class="same-row indent">
+      <p class="nomargin">Corner Coordinates:</p>
+    </span>
+    <span class="same-row indent">
+      <textarea id="coordsTextArea" rows="5">
+100 300
+300 300
+400 400
+500 300
+600 400
+700 300
+900 300
+800 400
+900 500
+900 700
+800 600
+700 700
+500 700
+600 600
+500 500
+500 700
+400 600
+300 700
+200 600
+100 700
+100 500
+200 400
+      </textarea>
+    </span>
+    <br/>
+    <br/>
+    <h3 class="nomargin">Magnifier Information</h3>
+    <span class="same-row indent">
+      <p class="r10 nomargin">Internal Coordinates:</p>
+      <input id="magInput" class="nomargin" value="700 500"/>
+    </span>
+    <span class="same-row indent">
+      <p class="r10 nomargin">Internal Side Length:</p>
+      <input id="magSideInput" class="nomargin" value="20"/>
+    </span>
+    <span class="same-row indent">
+      <p class="r10 nomargin">External Coordinates:</p>
+      <input id="magViewInput" class="nomargin" value="700 150"/>
+    </span>
+    <span class="same-row indent">
+      <p class="r10 nomargin">External Side Length:</p>
+      <input id="magViewSideInput" class="nomargin" value="200"/>
+    </span>
+  </div>
+  <div>
+    <h2>Animation</h2>
+    <div>
+      <button id="startAnimButton" onclick="startAnimation()">
+        Start Animation
+      </button>
+      <button id="stopAnimButton" onclick="stopAnimation()">
+        Stop Animation
+      </button>
+    </div>
+    <br/>
+    <canvas id="canvas" width="1000" height="800"
+            style="border: 1px solid black;"></canvas>
+  </div>
+  <div>
+    <h2 id="recordingHeader">Recording</h2>
+    <div>
+      <button id="startRecButton" onclick="startRecording()">
+        Start Recording
+      </button>
+      <button id="stopRecButton" onclick="stopRecording()">
+        Stop Recording
+      </button>
+      <button id="startAllButton" onclick="startAnimationAndRecording()">
+        Start Animation and Recording
+      </button>
+    </div>
+    <div>
+      <p id="status">Status: Recording not started</p>
+      <video id="recording" width="160" height="120"
+            controls autoplay loop></video>
+      <br/>
+      <span>
+        After the recording is complete:
+      </span>
+      <a id="downloadButton" href="#" download="Recording.webm">
+        Download
+      </a>
+    </div>
+  </div>
+  <script src="whammy.js"></script>
+  <script src="classes.js"></script>
+  <script src="multimag_photon.js"></script>
+  <script>
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const BACKGROUND_COLOR = 'black';
+    const WALL_COLOR = 'white';
+    const MAG_COLOR = '#FFFFFF';
+    const ORIGIN_COLOR = MAG_COLOR;
+    const PHOTON_HEAD_COLOR = '#fe7f2d';
+    const PHOTON_TAIL_COLOR = '#fcca46';
+
+    var COORDS = undefined; // The room coordinates.
+    var ORIGIN = undefined; // The light source.
+    var MAGS = undefined;   // Magnifiers.
+
+    const RENDER_INTERVAL_TIME = 33;
+
+    var boundaries = new Array(); // LineSegment instances representing walls.
+    var photons = new Array(); // Photon instances representing light.
+    var renderInterval;
+
+    // Streaks of light in the `MAG` box.
+    // Stores information in the form [Point1, Point2, Color].
+    var magLines = new Array(); // Streaks of light in the `MAG` box.
+
+    // Streaks of light in the canvas.
+    // Stores information in the form [Point1, Point2, Color].
+    var tailLines = new Array();
+
+    // Recording infrastructure.
+    var video = new Whammy.Video(RENDER_INTERVAL_TIME);
+    var currentlyRecording = false;
+    var recording = document.getElementById('recording');
+    var downloadButton = document.getElementById('downloadButton');
+    var statusElement = document.getElementById('status');
+    var startRecButton = document.getElementById('startRecButton');
+    var numCapturedFrames = 0;
+
+    // Customiser infrastructure;
+    var coordsTextArea = document.getElementById('coordsTextArea');
+    var originInput = document.getElementById('originInput');
+    var magInput = document.getElementById('magInput');
+    var magSideInput = document.getElementById('magSideInput');
+    var magViewInput = document.getElementById('magViewInput');
+    var magViewSideInput = document.getElementById('magViewSideInput');
+
+    // Loads the customiser information into the global variables.
+    function loadInfo() {
+      // Sanitize the data.
+      if (!isCoords2D(originInput.value)) {
+        alert(`Invalid Origin Coordinate: "${originInput.value}".`);
+        return;
+      }
+      var lines = coordsTextArea.innerHTML.split('\n');
+      var sanitizedCoords = [];
+      for (var i = 0; i < lines.length; ++i) {
+        lines[i] = lines[i].trim();
+        if (lines[i] === '') {
+          continue;
+        }
+        if (!isCoords2D(lines[i])) {
+          alert(`Invalid Room Coordinate: "${lines[i]}".`);
+          return;
+        }
+        coordInput = lines[i].split(' ');
+        sanitizedCoords.push([
+          parseInt(coordInput[0]),
+          parseInt(coordInput[1])
+        ]);
+      }
+      if (!isCoords2D(magInput.value)) {
+        alert(`Invalid Internal Mag Coordinate: "${magInput.value}".`);
+        return;
+      }
+      if (!isNumber(magSideInput.value)) {
+        alert(`Invalid Internal Mag Side Length: "${magSideInput.value}"`);
+        return;
+      }
+      if (!isCoords2D(magViewInput.value)) {
+        alert(`Invalid External Mag Coordinate: "${magViewInput.value}".`);
+        return;
+      }
+      if (!isNumber(magViewSideInput.value)) {
+        alert(`Invalid External Mag Side Length: "${magViewSideInput.value}"`);
+        return;
+      }
+      // All input is valid. Set the global variables.
+      var originTokens = originInput.value.split(' ');
+      var magTokens = magInput.value.split(' ');
+      var magViewTokens = magViewInput.value.split(' ');
+      COORDS = sanitizedCoords;
+      ORIGIN = [
+        parseInt(originTokens[0]),
+        parseInt(originTokens[1])
+      ];
+      MAGS = [
+        new Magnifier(
+          [parseInt(magTokens[0]), parseInt(magTokens[1])],
+          parseInt(magSideInput.value),
+          [parseInt(magViewTokens[0]), parseInt(magViewTokens[1])],
+          parseInt(magViewSideInput.value)
+        )
+      ];
+    }
+
+    function isNumber(str) {
+      return !isNaN(parseFloat(str));
+    }
+
+    function isCoords2D(str) {
+      coordInput = str.split(' ');
+      if (coordInput.length != 2) {
+        return false;
+      }
+      return isNumber(coordInput[0]) && isNumber(coordInput[1]);
+    }
+
+    function displayStatus(message) {
+      statusElement.innerHTML = message;
+    }
+
+    function startRecording() {
+      if (currentlyRecording) {
+        return;
+      }
+      if (!confirm('This feature only works on Firefox right now. Proceed?')) {
+        return;
+      }
+      currentlyRecording = true;
+    }
+
+    function stopRecording() {
+      if (!currentlyRecording) {
+        return;
+      }
+      currentlyRecording = false;
+      startRecButton.disabled = true;
+      startAllButton.disabled = true;
+      displayStatus('Compiling video...');
+      const timeStart = +new Date;
+      video.compile(false, function(output) {
+        var url = (window.URL ? URL : webkitURL).createObjectURL(output);
+        console.log(url);
+        recording.src = url;
+        downloadButton.href = recording.src;
+        const timeEnd = +new Date;
+        console.log(output);
+        displayStatus(`Video compile time: ${timeEnd - timeStart}ms. Size ` +
+            `${Math.ceil(output.size / 1024)}KB.`);
+      });
+    }
+
+    function loadBoundaries() {
+      boundaries = new Array();
+      for (var i = 0; i < COORDS.length; ++i) {
+        nxtIdx = (i + 1) % COORDS.length;
+        boundaries.push(new LineSegment(
+          COORDS[i][0],
+          COORDS[i][1],
+          COORDS[nxtIdx][0],
+          COORDS[nxtIdx][1]
+        ));
+      }
+    }
+    
+    function createPhotons() {
+      photons = new Array();
+      // Testing photons:
+      // photons.push(new Photon(ORIGIN[0], ORIGIN[1], Math.PI * (1 / 6),
+      //     0.151, 0.175, 'red', 'red'));
+      // photons.push(new Photon(ORIGIN[0], ORIGIN[1], -Math.PI * (1 / 6),
+      //     0.151, 0.175, 'red', 'red'));
+      var photonRadius = 1;
+      for (var i = 0; i < 360; ++i) {
+        var fractionOfAngle = (i / 360) * (2 * Math.PI);
+        photons.push(new MultiMagPhoton(
+          ORIGIN[0] + Math.cos(fractionOfAngle) * photonRadius,
+          ORIGIN[1] + Math.sin(fractionOfAngle) * photonRadius,
+          fractionOfAngle,
+          0.151,
+          0.151,
+          `HSL(${i}, 100%, 50%)`,
+          `HSL(${i}, 100%, 50%)`,
+          MAGS.length
+        ));
+      }
+    }
+
+    function drawCircle(x, y, radius, color) {
+      ctx.beginPath();
+      ctx.fillStyle = color; 
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    function drawLine(x1, y1, x2, y2, color, width = 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    function drawBackground() {
+      ctx.beginPath();
+      ctx.fillStyle = BACKGROUND_COLOR;
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.fill();
+    }
+
+    function drawRoom() {
+      for (var i = 0; i < COORDS.length; ++i) {
+        var nxtIdx = (i + 1) % COORDS.length;
+        drawLine(COORDS[i][0], COORDS[i][1], COORDS[nxtIdx][0],
+            COORDS[nxtIdx][1], WALL_COLOR, 10);
+        drawCircle(COORDS[i][0], COORDS[i][1], 5, WALL_COLOR);
+      }
+      ctx.beginPath();
+      ctx.fillStyle = BACKGROUND_COLOR;
+      ctx.moveTo(COORDS[0][0], COORDS[0][1]);
+      for (var i = 0; i < COORDS.length; ++i) {
+        nxtIdx = (i + 1) % COORDS.length;
+        ctx.lineTo(COORDS[nxtIdx][0], COORDS[nxtIdx][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawPointsOfInterest() {
+      drawCircle(ORIGIN[0], ORIGIN[1], 2, ORIGIN_COLOR);
+      for (var i = 0; i < MAGS.length; ++i) {
+        drawCircle(MAGS[i].mag[0], MAGS[i].mag[1], 2, MAG_COLOR);
+        drawCircle(MAGS[i].mag[0], MAGS[i].mag[1], 0.7, BACKGROUND_COLOR);
+      }
+    }
+
+    function drawPhotons() {
+      for (var i = 0; i < tailLines.length; ++i) {
+        drawLine(
+          tailLines[i][0][0],
+          tailLines[i][0][1],
+          tailLines[i][1][0],
+          tailLines[i][1][1],
+          tailLines[i][2]
+        );
+      }
+      for (var i = 0; i < photons.length; ++i) {
+        var len = photons[i].contactPoints.length;
+        drawLine(
+          photons[i].contactPoints[len - 1][0],
+          photons[i].contactPoints[len - 1][1],
+          photons[i].x,
+          photons[i].y,
+          photons[i].tailColor
+        );
+      }
+      for (var i = 0; i < photons.length; ++i) {
+        if (photons[i].active) {
+          drawCircle(photons[i].x, photons[i].y, 1.3, photons[i].headColor);
+        }
+      }
+    }
+
+    function drawMags() {
+      // Draw the circles.
+      for (var i = 0; i < MAGS.length; ++i) {
+        drawCircle(MAGS[i].magView[0], MAGS[i].magView[1], 3, MAG_COLOR);
+        drawCircle(MAGS[i].magView[0], MAGS[i].magView[1], 1.5,
+            BACKGROUND_COLOR);
+      }
+      // Draw lines from past photons.
+      for (var i = 0; i < magLines.length; ++i) {
+        drawLine(
+          magLines[i][0][0],
+          magLines[i][0][1],
+          magLines[i][1][0],
+          magLines[i][1][1],
+          magLines[i][2],
+          2
+        );
+      }
+      // Draw each magnifier.
+      for (var mag = 0; mag < MAGS.length; ++mag) {
+        // Draw the photons.
+        for (var i = 0; i < photons.length; ++i) {
+          if (MAGS[mag].magSquare.contains(photons[i].x, photons[i].y)) {
+            var viewerPos = MAGS[mag].translate(photons[i].x, photons[i].y);
+            drawCircle(viewerPos[0], viewerPos[1], 3, photons[i].headColor);
+            drawLine(photons[i].magEntry[mag][0], photons[i].magEntry[mag][1],
+                viewerPos[0], viewerPos[1], photons[i].tailColor, 2);
+          }
+        }
+        // Draw the box around the point in the room.
+        for (var i = 0; i < MAGS[mag].magBox.length; ++i) {
+          var nxtIdx = (i + 1) % MAGS[mag].magBox.length;
+          drawLine(MAGS[mag].magBox[i][0], MAGS[mag].magBox[i][1],
+              MAGS[mag].magBox[nxtIdx][0], MAGS[mag].magBox[nxtIdx][1],
+              MAG_COLOR, 2);
+          drawCircle(MAGS[mag].magBox[i][0], MAGS[mag].magBox[i][1], 1,
+              MAG_COLOR);
+        }
+        // Draw the viewer bounds.
+        for (var i = 0; i < MAGS[mag].magViewBox.length; ++i) {
+          var nxtIdx = (i + 1) % MAGS[mag].magViewBox.length;
+          drawLine(MAGS[mag].magViewBox[i][0], MAGS[mag].magViewBox[i][1],
+              MAGS[mag].magViewBox[nxtIdx][0], MAGS[mag].magViewBox[nxtIdx][1],
+              MAG_COLOR, 2);
+          drawCircle(MAGS[mag].magViewBox[i][0], MAGS[mag].magViewBox[i][1], 1,
+              MAG_COLOR);
+        }
+      }
+    }
+
+    function draw() {
+      drawBackground();
+      drawRoom();
+      drawPhotons();
+      drawPointsOfInterest();
+      drawMags();
+    }
+
+    function updatePositions() {
+      // Delete photons that hit corners.
+      for (var i = photons.length - 1; i >= 0; --i) {
+        for (var point = 0; point < COORDS.length; ++point) {
+          if (photons[i].checkPointCollision(
+                COORDS[point][0], COORDS[point][1])) {
+            photons[i].deactivate();
+            break;
+          }
+        }
+      }
+      // Bounce photons off edges.
+      for (var i = 0; i < photons.length; ++i) {
+        for (var edge = 0; edge < boundaries.length; ++edge) {
+          if (edge !== photons[i].lastBounce &&
+              photons[i].checkLineCollision(boundaries[edge])) {
+            photons[i].lastBounce = edge;
+            photons[i].bounceOffSegment(boundaries[edge]);
+            var cpLen = photons[i].contactPoints.length;
+            tailLines.push([
+              photons[i].contactPoints[cpLen - 1],
+              photons[i].contactPoints[cpLen - 2],
+              photons[i].tailColor
+            ]);
+            for (var mag = 0; mag < MAGS.length; ++mag) {
+              if (MAGS[mag].magSquare.contains(photons[i].x, photons[i].y)) {
+                // Bouncing inside the mag.
+                // Maths copied from updateMags.
+                var viewerPos = MAGS[mag].translate(
+                  photons[i].x,
+                  photons[i].y
+                );
+                photons[i].lastMagPoint[mag] = [viewerPos[0], viewerPos[1]];
+                magLines.push([
+                  photons[i].magEntry[mag],
+                  photons[i].lastMagPoint[mag],
+                  photons[i].tailColor,
+                ]);
+                photons[i].magEntry[mag] = [viewerPos[0], viewerPos[1]];
+              }
+            }
+            break;
+          }
+        }
+      }
+      // Move the photons.
+      for (var i = 0; i < photons.length; ++i) {
+        photons[i].updatePosition();
+      }
+    }
+
+    function updateMags() {
+      for (var mag = 0; mag < MAGS.length; ++mag) {
+        for (var i = 0; i < photons.length; ++i) {
+          if (MAGS[mag].magSquare.contains(photons[i].x, photons[i].y)) {
+            var viewerPos = MAGS[mag].translate(photons[i].x, photons[i].y);
+            if (photons[i].magEntry[mag] === null) {
+              // Just entered the square.
+              photons[i].magEntry[mag] = [viewerPos[0], viewerPos[1]];
+            }
+            photons[i].lastMagPoint[mag] = [viewerPos[0], viewerPos[1]];
+          } else if (!MAGS[mag].magSquare.contains(photons[i].x, photons[i].y)
+              && photons[i].magEntry[mag] !== null) {
+            // Just left the square.
+            magLines.push([
+              photons[i].magEntry[mag],
+              photons[i].lastMagPoint[mag],
+              photons[i].tailColor,
+            ]);
+            photons[i].magEntry[mag] = null;
+            photons[i].lastMagPoint[mag] = null;
+          }
+        }
+      }
+    }
+
+    function updateScreen() {
+      for (var i = 0; i < 10; ++i) {
+        updatePositions();
+        updateMags();
+      }
+      draw();
+      if (currentlyRecording) {
+        video.add(ctx);
+        ++numCapturedFrames;
+        if (numCapturedFrames % RENDER_INTERVAL_TIME == 0) {
+          var secs = numCapturedFrames / RENDER_INTERVAL_TIME;
+          displayStatus(
+            `Recording: captured ${secs} second(s) of film so far...`
+          );
+        }
+      }
+    }
+
+    function startAnimation() {
+      clearInterval(renderInterval);
+      magLines = new Array();
+      loadBoundaries();
+      createPhotons();
+      renderInterval = setInterval(updateScreen, RENDER_INTERVAL_TIME);
+    }
+
+    function startAnimationAndRecording() {
+      if (currentlyRecording) {
+        return;
+      }
+      startRecording();
+      if (!currentlyRecording) {
+        // The user cancelled the operation
+        return;
+      }
+      video.add(ctx);
+      startAnimation();
+    }
+
+    function stopAnimation() {
+      clearInterval(renderInterval);
+    }
+  </script>
+</body>
+</html>
