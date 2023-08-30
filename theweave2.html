@@ -29,6 +29,17 @@ SOFTWARE. -->
       body {
         font-family: Arial, Helvetica, sans-serif;
       }
+
+      .nomargin {
+        margin-bottom: 7px;
+        margin-top: 0px;
+      }
+
+      .same-row {
+        display:flex;
+        flex-direction: row;
+        align-items: center;
+      }
     </style>
 </head>
 <body onload="draw()">
@@ -56,7 +67,7 @@ SOFTWARE. -->
   </div>
   <div>
     <h2 id="recordingHeader">Recording</h2>
-    <div>
+    <div class="same-row">
       <button id="startRecButton" onclick="startRecording()">
         Start Recording
       </button>
@@ -66,6 +77,8 @@ SOFTWARE. -->
       <button id="startAllButton" onclick="startAnimationAndRecording()">
         Start Animation and Recording
       </button>
+      <input id="startFrameInput" value="0"/>
+      <input id="endFrameInput" value="2000"/>
     </div>
     <div>
       <p id="status">Status: Recording not started</p>
@@ -143,7 +156,12 @@ SOFTWARE. -->
     var downloadButton = document.getElementById('downloadButton');
     var statusElement = document.getElementById('status');
     var startRecButton = document.getElementById('startRecButton');
+    var startFrameInput = document.getElementById('startFrameInput');
+    var endFrameInput = document.getElementById('endFrameInput');
+    var startFrameValue = undefined;
+    var endFrameValue = undefined;
     var numCapturedFrames = 0;
+    var totalPhysicsUpdates = 0;
 
     function displayStatus(message) {
       statusElement.innerHTML = message;
@@ -156,6 +174,8 @@ SOFTWARE. -->
       if (!confirm('This feature only works on Firefox right now. Proceed?')) {
         return;
       }
+      startFrameInput.disabled = true;
+      endFrameInput.disabled = true;
       currentlyRecording = true;
     }
 
@@ -287,7 +307,7 @@ SOFTWARE. -->
       }
       for (var i = 0; i < photons.length; ++i) {
         if (photons[i].active) {
-          drawCircle(photons[i].x, photons[i].y, 1.3, photons[i].headColor);
+          drawCircle(photons[i].x, photons[i].y, 2, photons[i].headColor);
         }
       }
     }
@@ -471,13 +491,29 @@ SOFTWARE. -->
       }
     }
 
-    function updateScreen() {
+    function updatePhysics() {
+      ++totalPhysicsUpdates;
       for (var i = 0; i < 10; ++i) {
         updatePositions();
         updateMags();
       }
+    }
+
+    function setupCanvas() {
+      magLines = new Array();
+      tailLines = new Array();
+      loadBoundaries();
+      createPhotons();
+    }
+
+    function updateScreen() {
+      updatePhysics();
       draw();
       if (currentlyRecording) {
+        if (totalPhysicsUpdates > endFrameValue) {
+          stopRecording();
+          return;
+        }
         video.add(ctx);
         ++numCapturedFrames;
         if (numCapturedFrames % RENDER_INTERVAL_TIME == 0) {
@@ -490,11 +526,8 @@ SOFTWARE. -->
     }
 
     function startAnimation() {
+      setupCanvas();
       clearInterval(renderInterval);
-      magLines = new Array();
-      tailLines = new Array();
-      loadBoundaries();
-      createPhotons();
       renderInterval = setInterval(updateScreen, RENDER_INTERVAL_TIME);
     }
 
@@ -502,13 +535,24 @@ SOFTWARE. -->
       if (currentlyRecording) {
         return;
       }
+      if (isNaN(parseInt(startFrameInput.value)) ||
+          isNaN(parseInt(endFrameInput.value))) {
+        alert('Non-integer value in the frame range boxes.');
+        return;
+      }
+      clearInterval(renderInterval);
       startRecording();
       if (!currentlyRecording) {
         // The user cancelled the operation
         return;
       }
-      video.add(ctx);
-      startAnimation();
+      startFrameValue = parseInt(startFrameInput.value);
+      endFrameValue = parseInt(endFrameInput.value);
+      setupCanvas();
+      for (var i = 0; i < startFrameValue; ++i) {
+        updatePhysics();
+      }
+      renderInterval = setInterval(updateScreen, RENDER_INTERVAL_TIME);
     }
 
     function stopAnimation() {
